@@ -18,6 +18,8 @@ public class SpELTest {
     @Test
     public void spelTest() {
 
+
+
         SpelExpressionParser parser = new SpelExpressionParser();
         String test = "通过接口调用更新项目名称{#root.id}}，原始名称为#{root.name}";
         ProjectDto projectDto = new ProjectDto();
