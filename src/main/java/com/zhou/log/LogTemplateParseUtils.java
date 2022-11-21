@@ -1,10 +1,13 @@
 package com.zhou.log;
 
-import com.zhou.log.model.LogFunction;
+import com.zhou.log.func.LogCustomFunction;
+import com.zhou.log.func.LogSnapshotFunction;
+import com.zhou.log.model.LogExpression;
 
-import javax.swing.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * [日志模板表达解析工具类]
@@ -16,39 +19,37 @@ import java.util.List;
  **/
 public class LogTemplateParseUtils {
 
-    public static final String LEFT_SPLIT_STR = "{";
-    public static final String RIGHT_SPLIT_STR = "}";
+    private static final Map<String, LogCustomFunction> customFunctionList = new HashMap();
 
-    public static final String SpEL_SIGN_STR = "#";
-    public static final String ARG = "arg";
-    public static final String FUNC = "func";
+    private static final Map<String, LogSnapshotFunction> snapshotFunctionList = new HashMap();
 
-    public static List<LogFunction> pares(String content) {
+
+    public static List<LogExpression> pares(String content) {
         int length = content.length();
         int startNum = 0;
         int funcStart = 0;
-        List<LogFunction> SpELList = new ArrayList<>();
-        LogFunction current = null;
+        List<LogExpression> SpELList = new ArrayList<>();
+        LogExpression current = null;
         for (int i = 0; i < length; i++) {
-            if (content.charAt(i) == LEFT_SPLIT_STR.charAt(0)) {
+            if (content.charAt(i) == LogExpression.LEFT_SPLIT_STR.charAt(0)) {
                 //{符号过后的后一位，判断是参数还是自定义函数
                 if (current == null) {
-                    current = new LogFunction();
+                    current = new LogExpression();
                 }
-                if (content.charAt(i + 1) == SpEL_SIGN_STR.charAt(0)) {
+                if (content.charAt(i + 1) == LogExpression.SpEL_SIGN_STR.charAt(0)) {
                     if (current.getType() != null) {
                         //说明是方法，已经设置过类型
                         current.setName(content.substring(startNum + 1, i));
                     } else {
-                        current.setType(ARG);
+                        current.setType(LogExpression.ARG);
                     }
                 } else {
-                    current.setType(FUNC);
+                    current.setType(LogExpression.FUNC);
                     funcStart = i;
                 }
                 startNum = i;
-            } else if (content.charAt(i) == RIGHT_SPLIT_STR.charAt(0)) {
-                if (current.getType().equals(ARG)) {
+            } else if (content.charAt(i) == LogExpression.RIGHT_SPLIT_STR.charAt(0)) {
+                if (current.getType().equals(LogExpression.ARG)) {
                     current.setName(content.substring(startNum + 1, i));
                     current.setCompleteExpression(content.substring(startNum, i + 1));
                 } else {
@@ -64,9 +65,60 @@ public class LogTemplateParseUtils {
         return SpELList;
     }
 
+    /**
+     * 初始化
+     * @param map
+     */
+    public static void initCustomFunctionList(Map<String, LogCustomFunction> map) {
+        for (String name : map.keySet()) {
+            LogCustomFunction logCustomFunction = map.get(name);
+            String functionName = logCustomFunction.functionName();
+            customFunctionList.put(functionName, map.get(name));
+        }
+    }
+
+    /**
+     * 初始化
+     * @param map
+     */
+    public static void initSnapshotFunctionList(Map<String, LogSnapshotFunction> map) {
+        for (String name : map.keySet()) {
+            LogSnapshotFunction logCustomFunction = map.get(name);
+            String functionName = logCustomFunction.functionName();
+            snapshotFunctionList.put(functionName, map.get(name));
+        }
+    }
+
+    /**
+     * 根据函数名获取对应的实现
+     * @param functionName 函数名
+     * @return 实现类
+     */
+    public static LogCustomFunction getCustomFunction(String functionName) {
+        LogCustomFunction logCustomFunction = customFunctionList.get(functionName);
+        if (logCustomFunction == null) {
+            throw new RuntimeException("函数名匹配错误，请检查是否有该函数");
+        }
+        return logCustomFunction;
+    }
+
+    /**
+     * 根据函数名获取对应的实现
+     * @param functionName 函数名
+     * @return 实现类
+     */
+    public static LogSnapshotFunction getSnapshotFunction(String functionName) {
+        LogSnapshotFunction logSnapshotFunction = snapshotFunctionList.get(functionName);
+        if (logSnapshotFunction == null) {
+            throw new RuntimeException("函数名匹配错误，请检查是否有该函数");
+        }
+        return logSnapshotFunction;
+    }
+
+
     public static void main(String[] args) {
         String str = "通过接口调用更新项目名称{#projectDto.id}，原始名称为{#projectDto.oldId}";
-        List<LogFunction> pares = LogTemplateParseUtils.pares(str);
+        List<LogExpression> pares = LogTemplateParseUtils.pares(str);
         System.out.println(pares);
     }
 

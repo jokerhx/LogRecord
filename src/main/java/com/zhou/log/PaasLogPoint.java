@@ -1,5 +1,6 @@
 package com.zhou.log;
 
+import com.zhou.log.func.LogCustomFunction;
 import org.slf4j.event.Level;
 
 import java.lang.annotation.ElementType;
@@ -28,7 +29,11 @@ public @interface PaasLogPoint {
     String operationLatitude() default "";
 
     /**
-     * 操作具体内容说明
+     * 操作具体内容说明,此字段支持SpEL表达式和自定义函数
+     * 自定义函数需要实现指定接口{@link LogCustomFunction}
+     * 格式必须按照{#demo.name}，以{}作为解析符号，返回其中的SpEL表达式
+     * 如果是自定义函数，则为{methodName{#user.id}},其中methodName为自定义函数方法名，#user.id为方法入参的SpEL表达式
+     * 注：暂不支持方法嵌套使用
      */
     String content() default "";
 

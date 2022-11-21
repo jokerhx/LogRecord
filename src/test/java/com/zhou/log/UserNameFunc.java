@@ -1,16 +1,18 @@
 package com.zhou.log;
 
 import com.zhou.log.func.LogCustomFunction;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 /**
- * []
+ * [获取用户姓名]
  *
  * @author bihai.zhou@funi365.com
- * @date 2022/11/16 10:08
+ * @date 2022/11/18 15:17
  **/
-@Component
-public class ProjectNameFunc implements LogCustomFunction {
+@Service
+public class UserNameFunc implements LogCustomFunction  {
+
+
     /**
      * 函数名称
      *
@@ -18,7 +20,7 @@ public class ProjectNameFunc implements LogCustomFunction {
      */
     @Override
     public String functionName() {
-        return "getProjectName";
+        return "getUserName";
     }
 
     /**
@@ -29,9 +31,11 @@ public class ProjectNameFunc implements LogCustomFunction {
      */
     @Override
     public String apply(Object value) {
-        String id = (String) value;
-        if (id.equals("2")) {
-            return "测试项目2";
+        if (value instanceof ProjectDto){
+            ProjectDto projectDto = (ProjectDto) value;
+            if (projectDto.getId().equals("1")) {
+                return "项目1的用户名";
+            }
         }
         return null;
     }

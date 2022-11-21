@@ -9,8 +9,16 @@ package com.zhou.log.func;
 public interface LogCustomFunction {
 
     /**
+     * 是否在目标方法前执行
+     */
+    default boolean executeBefore() {
+        return false;
+    }
+
+
+    /**
      * 函数名称
-     * @return 表达式中的函数名必须和此方法返回的相同
+     * @return 表达式中的函数名必须和此方法返回的相同，保证唯一性
      */
     String functionName();
 

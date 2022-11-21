@@ -1,14 +1,10 @@
 package com.zhou.log;
 
-import com.zhou.log.model.LogFunction;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.expression.Expression;
-import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.util.Assert;
 
 import javax.annotation.Resource;
-import java.util.List;
-import java.util.UUID;
 
 /**
  * []
@@ -38,5 +34,26 @@ public class LogTest {
         projectDto.setName("测试项目");
         logTestProjectService.insert(projectDto,"用户id");
     }
+
+    @Test
+    public void errorInsert() {
+        ProjectDto projectDto = new ProjectDto();
+        projectDto.setId("1");
+        projectDto.setName("测试项目");
+        try {
+            logTestProjectService.errorInsert(projectDto, "用户id");
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    @Test
+    public void insertByUser() {
+        ProjectDto projectDto = new ProjectDto();
+        projectDto.setId("1");
+        projectDto.setName("测试项目");
+        logTestProjectService.insertByUser(projectDto);
+    }
+
 
 }

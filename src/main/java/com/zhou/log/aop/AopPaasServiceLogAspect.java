@@ -6,9 +6,8 @@ import com.zhou.log.LogTemplateParseUtils;
 import com.zhou.log.PaasLogPoint;
 import com.zhou.log.event.PaasLogEvent;
 import com.zhou.log.func.LogCustomFunction;
-import com.zhou.log.model.LogFunction;
+import com.zhou.log.model.LogExpression;
 import com.zhou.log.model.PaasBusinessLog;
-import com.zhou.log.service.ServiceLocator;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.Signature;
@@ -50,12 +49,13 @@ public class AopPaasServiceLogAspect {
 
     private LocalVariableTableParameterNameDiscoverer discoverer = new LocalVariableTableParameterNameDiscoverer();
 
-    @Resource
-    private ServiceLocator serviceLocator;
+    private EvaluationContext context = new StandardEvaluationContext();
 
     private String appCode;
 
     private Map<String, MethodLocation> map = new HashMap<>();
+
+    private SpelExpressionParser parser = new SpelExpressionParser();
 
     @PostConstruct
     public void init() {
@@ -72,7 +72,6 @@ public class AopPaasServiceLogAspect {
 
     @Around("annotationPointCut()")
     public Object aroundAdvice(ProceedingJoinPoint pjp) throws Throwable {
-        SpelExpressionParser parser = new SpelExpressionParser();
 
         Signature signature = pjp.getSignature();
         Class serviceClass = pjp.getSignature().getDeclaringType();
@@ -83,40 +82,22 @@ public class AopPaasServiceLogAspect {
 
         MethodLocation methodLocation = map.get(location);
         String content = methodLocation.methodPoint.content();
+        //解析方法参数
+        this.bindParam(methodLocation.method, pjp.getArgs());
 
-        EvaluationContext evaluationContext = this.bindParam(methodLocation.method, pjp.getArgs());
-
-        if (!CollectionUtils.isEmpty(methodLocation.args)) {
+        if (!CollectionUtils.isEmpty(methodLocation.expressionList)) {
             //需要进行表达式的处理
-            List<LogFunction> list = methodLocation.args;
-            for (LogFunction logFunction : list) {
-                if (LogTemplateParseUtils.ARG.equals(logFunction.getType())) {
-                    //SpEL表达式值获取
-                    SpelExpression spelExpression = parser.parseRaw(logFunction.getName());
-                    String value = (String) spelExpression.getValue(evaluationContext);
-                    logFunction.setResult(value);
-                } else {
-                    //自定义函数调用
-                    Map<String, LogCustomFunction> functionMap = serviceLocator.getMap();
-                    LogCustomFunction logCustomFunction = functionMap.get(logFunction.getName());
-
-                    String argName = logFunction.getArgName();
-                    Expression expression = parser.parseExpression(argName);
-                    Object value = expression.getValue(evaluationContext);
-                    String apply = logCustomFunction.apply(value);
-                    logFunction.setResult(apply);
+            List<LogExpression> list = methodLocation.expressionList;
+            for (LogExpression logExpression : list) {
+                boolean b = this.setResult(logExpression, true);
+                if (b) {
+                    //得到结果过后将表达式的内容进行替换
+                    content = content.replace(logExpression.getCompleteExpression(), logExpression.getResult());
                 }
-                //得到结果过后将表达式的内容进行替换
-                content = content.replace(logFunction.getCompleteExpression(), logFunction.getResult());
             }
         }
 
         PaasBusinessLog aopServiceLog = createPaasBusinessLog(methodLocation);
-        //收集content
-        if (methodLocation.methodPoint != null && !StringUtils.isEmpty(methodLocation.methodPoint.content())) {
-            //获取方法的参数值
-            aopServiceLog.setContent(content);
-        }
         try {
             aopServiceLog.setArguments(toString(pjp.getArgs()));
         } catch (Exception e) {
@@ -130,14 +111,38 @@ public class AopPaasServiceLogAspect {
         try {
             Object obj = pjp.proceed();
             success = true;
+            //执行在目标方法执行后的函数
+            if (!CollectionUtils.isEmpty(methodLocation.expressionList)) {
+                //需要进行表达式的处理
+                List<LogExpression> list = methodLocation.expressionList;
+                for (LogExpression logExpression : list) {
+                    boolean b = this.setResult(logExpression, false);
+                    if (b) {
+                        //得到结果过后将表达式的内容进行替换
+                        content = content.replace(logExpression.getCompleteExpression(), logExpression.getResult());
+                    }
+                }
+            }
             return obj;
+        } catch (Exception e) {
+            //todo 可以根据某些特定的错误类型，将其记录入日志中
+            e.printStackTrace();
+            throw e;
         } finally {
+            //收集content
+            if (methodLocation.methodPoint != null && !StringUtils.isEmpty(methodLocation.methodPoint.content())) {
+                //获取方法的参数值
+                aopServiceLog.setContent(content);
+            }
             aopServiceLog.setSuccess(success);
             aopServiceLog.setTotalTime(System.currentTimeMillis() - start);
             eventPublisher.publish(new PaasLogEvent(this, aopServiceLog));
         }
     }
 
+    /**
+     * 构建方法上所需数据
+     */
     private MethodLocation createMethodLocation(ProceedingJoinPoint pjp, Signature signature, Class serviceClass) {
         MethodLocation methodLocation = new MethodLocation();
         methodLocation.serviceName = serviceClass.getName();
@@ -148,13 +153,16 @@ public class AopPaasServiceLogAspect {
         if (methodLogPoint != null) {
             methodLocation.operationType = methodLogPoint.operationType();
             methodLocation.operationLatitude = methodLogPoint.operationLatitude();
-            methodLocation.args = LogTemplateParseUtils.pares(methodLogPoint.content());
+            methodLocation.expressionList = LogTemplateParseUtils.pares(methodLogPoint.content());
         }
         methodLocation.method = targetMethod;
         methodLocation.methodPoint = methodLogPoint;
         return methodLocation;
     }
 
+    /**
+     * 创建日志对象
+     */
     private PaasBusinessLog createPaasBusinessLog(MethodLocation methodLocation) {
         PaasBusinessLog aopServiceLog = new PaasBusinessLog();
         aopServiceLog.setFunction(methodLocation.methodName);
@@ -200,7 +208,10 @@ public class AopPaasServiceLogAspect {
         private PaasLogPoint methodPoint;
         private Method method;
 
-        private List<LogFunction> args;
+        /**
+         * 内容中包含的表达式集合
+         */
+        private List<LogExpression> expressionList;
     }
 
 
@@ -211,15 +222,47 @@ public class AopPaasServiceLogAspect {
      * @param args   方法的参数值
      * @return
      */
-    private EvaluationContext bindParam(Method method, Object[] args) {
+    private void bindParam(Method method, Object[] args) {
         //获取方法的参数名
         String[] params = discoverer.getParameterNames(method);
 
         //将参数名与参数值对应起来
-        EvaluationContext context = new StandardEvaluationContext();
         for (int len = 0; len < params.length; len++) {
             context.setVariable(params[len], args[len]);
         }
-        return context;
+    }
+
+    /**
+     * 设置表达式对应的结果
+     * @param logExpression 表达式
+     * @param before 是否在当前方法调用前
+     * @return 是否设置结果
+     */
+    private boolean setResult(LogExpression logExpression,boolean before) {
+        if (LogExpression.ARG.equals(logExpression.getType())) {
+            if (before) {
+                //参数在目标方法执行前统一执行
+                //SpEL表达式值获取
+                SpelExpression spelExpression = parser.parseRaw(logExpression.getName());
+                String value = (String) spelExpression.getValue(context);
+                logExpression.setResult(value);
+            } else {
+                return false;
+            }
+        } else {
+            //自定义函数调用
+            //获取对应的实现类
+            LogCustomFunction logCustomFunction = LogTemplateParseUtils.getCustomFunction(logExpression.getName());
+            if (logCustomFunction.executeBefore() != before) {
+                return false;
+            }
+            //参数解析
+            String argName = logExpression.getArgName();
+            Expression expression = parser.parseExpression(argName);
+            Object value = expression.getValue(context);
+            String apply = logCustomFunction.apply(value);
+            logExpression.setResult(apply);
+        }
+        return true;
     }
 }

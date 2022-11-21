@@ -13,7 +13,7 @@ public interface PaasLogRecordService {
 
     /**
      * 记录日志
-     * @param businessLog
+     * @param businessLog 日志记录对象
      */
     void log(PaasBusinessLog businessLog);
 

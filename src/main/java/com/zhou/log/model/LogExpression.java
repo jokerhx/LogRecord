@@ -3,13 +3,20 @@ package com.zhou.log.model;
 import lombok.Data;
 
 /**
- * [日志自定义函数]
+ * [日志表达式]
  *
  * @author bihai.zhou@funi365.com
  * @date 2022/11/15 20:05
  **/
 @Data
-public class LogFunction {
+public class LogExpression {
+
+    public static final String LEFT_SPLIT_STR = "{";
+    public static final String RIGHT_SPLIT_STR = "}";
+
+    public static final String SpEL_SIGN_STR = "#";
+    public static final String ARG = "arg";
+    public static final String FUNC = "func";
 
     /**
      * 名称
@@ -18,6 +25,8 @@ public class LogFunction {
 
     /**
      * 当前是参数还是自定义函数
+     * {@link LogExpression#FUNC}
+     * {@link LogExpression#ARG}
      */
     private String type;
 

@@ -10,7 +10,16 @@ import org.springframework.stereotype.Component;
  * @date 2022/11/16 10:08
  **/
 @Component
-public class ProjectNameFunc implements LogCustomFunction {
+public class ProjectNameBeforeFunc implements LogCustomFunction {
+
+    /**
+     * 是否在目标方法前执行
+     */
+    @Override
+    public boolean executeBefore() {
+        return true;
+    }
+
     /**
      * 函数名称
      *
@@ -18,7 +27,7 @@ public class ProjectNameFunc implements LogCustomFunction {
      */
     @Override
     public String functionName() {
-        return "getProjectName";
+        return "getProjectName_before";
     }
 
     /**
@@ -30,8 +39,8 @@ public class ProjectNameFunc implements LogCustomFunction {
     @Override
     public String apply(Object value) {
         String id = (String) value;
-        if (id.equals("2")) {
-            return "测试项目2";
+        if (id.equals("1")) {
+            return "测试项目1";
         }
         return null;
     }
